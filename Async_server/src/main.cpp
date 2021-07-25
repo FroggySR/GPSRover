@@ -1,0 +1,411 @@
+#include <Arduino.h>
+
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <vector>
+
+//Your WiFi credentials
+const char* ssid = "UniFi";
+const char* password =  "Logitech";
+
+//Your RTK2GO mount point credentials
+const char* mntpnt_pw = "BNZefRKy";
+const char* mntpnt = "stemannsgade";
+
+short MaxConnections = 3;
+
+unsigned long lastTick;
+
+IPAddress myIp(192,168,1,239);
+
+#include <Wire.h> //Needed for I2C to GPS
+#include "SparkFun_Ublox_Arduino_Library.h" //http://librarymanager/All#SparkFun_u-blox_GNSS
+SFE_UBLOX_GPS myGPS;
+
+//Basic Connection settings to RTK2Go NTRIP Caster - See secrets for mount specific credentials
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+const uint16_t casterPort = 2101; 
+const char * casterHost = "192.168.1.238";
+const char * ntrip_server_name = "stemannsgade";
+
+long lastSentRTCM_ms = 0; //Time of last data pushed to socket
+int maxTimeBeforeHangup_ms = 10000; //If we fail to get a complete RTCM frame after 10s, then disconnect from caster
+
+uint32_t serverBytesSent = 0; //Just a running total
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+long lastReport_ms = 0; //Time of last report of bytes sent
+
+//LED Status flash
+unsigned long time1;
+unsigned long time2;
+int xLed = 1;
+
+AsyncServer tcpServer(myIp,7809);
+static std::vector<AsyncClient*> clients; 
+static std::vector<AsyncClient*>::iterator cl;
+
+//Status Led function
+void ledFlash(int delay)
+{
+  time1=millis();
+  if (time2-time1 >=delay)
+  {
+    xLed=1-xLed;
+    time1=millis();
+    digitalWrite(BUILTIN_LED,xLed);
+    
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void addClient(AsyncClient* client)
+{
+      clients.push_back(client);
+}
+
+void removeClient(AsyncClient* client)
+{
+    for(cl = clients.begin(); cl!= clients.end(); cl++)    
+    {
+        if( *cl == client )
+        {   
+            clients.erase(cl);
+            return;
+        }
+    }
+}
+
+void removeAllClients()
+{
+    for(cl = clients.begin(); cl!= clients.end(); cl++)    
+    {
+        (*cl)->close();
+    }
+}
+
+void sendStringToClient( AsyncClient* client, String sendMsg )
+{
+    if( !client->canSend() ) { return; }
+    
+    if ( client->space() > sendMsg.length() ) 
+    {
+          client->add( sendMsg.c_str() , sendMsg.length() );
+          client->send();
+    }
+}
+
+void sendStringToClientIP( String ip , String sendMsg )
+{
+    for(cl = clients.begin(); cl!= clients.end(); cl++)    
+    {
+        if( (*cl)->remoteIP().toString() == ip )
+        {   
+            sendStringToClient( (*cl) , sendMsg );
+            return;
+        }
+    }
+}
+
+void sendStringToAllClients( String sendMsg )
+{
+    for(cl = clients.begin(); cl!= clients.end(); cl++)    
+    {
+        sendStringToClient( (*cl) , sendMsg );
+    }
+}
+
+static void handleData(void* arg, AsyncClient* client, void *data, size_t len)
+{
+    Serial.print("[CALLBACK] data received, ip: " + client->remoteIP().toString());
+    Serial.println( " [" + String((char*)data) + "]" );
+
+    // here you could also send a String back by doing this:
+    // sendStringToClient( client , "Hello from server!" ); // reply to client
+}
+
+static void handleError(void* arg, AsyncClient* client, int8_t error) 
+{
+    Serial.println("[CALLBACK] client error, ip: " + client->remoteIP().toString());
+}
+
+static void handleTimeOut(void* arg, AsyncClient* client, uint32_t time) 
+{
+    Serial.println("[CALLBACK] ACK timeout, ip: " + client->remoteIP().toString());
+}
+
+static void handleDisconnect(void* arg, AsyncClient* client) 
+{
+    Serial.println("[CALLBACK] client discconnected, ip: " + client->remoteIP().toString());
+    
+    removeClient(client);
+}
+
+static void setupNewClient(void* arg, AsyncClient* client) 
+{
+    if( clients.size() >= MaxConnections ) 
+    { 
+        client->close();
+        return; 
+    } 
+
+    Serial.println("[SERVER] new client conneced, ip: " + client->remoteIP().toString());
+    
+    addClient( client );
+
+    client->setRxTimeout(60);
+    client->onData(&handleData, NULL);
+    client->onError(&handleError, NULL);
+    client->onTimeout(&handleTimeOut, NULL);
+    client->onDisconnect(&handleDisconnect, NULL);
+}
+
+
+
+void beginServing()
+{
+  Serial.println("Test connection to multiple clients);
+  delay(10); //Wait for any serial to arrive
+  while (Serial.available()) Serial.read(); //Flush
+
+   
+  while (Serial.available() == 0)
+  {
+    //Connect if we are not already
+    if ()
+    {
+      Serial.printf("Opening socket to %s\n", casterHost);
+
+      if (1) //Attempt connection
+      {
+        Serial.printf("Connected to %s:%d\n", casterHost, casterPort);
+
+        const int SERVER_BUFFER_SIZE  = 512;
+        char serverBuffer[SERVER_BUFFER_SIZE];
+
+        snprintf(serverBuffer, SERVER_BUFFER_SIZE, "SOURCE %s /%s\r\nSource-Agent: NTRIP %s/%s\r\n\r\n",
+                 mntpnt_pw, mntpnt, ntrip_server_name, "1.0");
+
+        Serial.printf("Sending credentials:\n%s\n", serverBuffer);
+       // client.write(serverBuffer, strlen(serverBuffer));
+
+        //Wait for response
+        unsigned long timeout = millis();
+        while (client.available() == 0)
+        {
+          if (millis() - timeout > 5000)
+          {
+            Serial.println(">>> Client Timeout !");
+            client.stop();
+            return;
+          }
+          delay(10);
+        }
+
+        //Check reply
+        bool connectionSuccess = false;
+        char response[512];
+        int responseSpot = 0;
+        while (client.available())
+        {
+          response[responseSpot++] = client.read();
+          if (strstr(response, "200") > 0) //Look for 'ICY 200 OK'
+            connectionSuccess = true;
+          if (responseSpot == 512 - 1) break;
+        }
+        response[responseSpot] = '\0';
+
+        if (connectionSuccess == false)
+        {
+          Serial.printf("Failed to connect to RTK2Go: %s", response);
+        }
+      } //End attempt to connect
+      else
+      {
+        Serial.println("Connection to host failed");
+      }
+    } //End connected == false
+
+    if (client.connected() == true)
+    {
+      delay(10);
+      while (Serial.available()) Serial.read(); //Flush any endlines or carriage returns
+
+      lastReport_ms = millis();
+      lastSentRTCM_ms = millis();
+
+      //This is the main sending loop. We scan for new ublox data but processRTCM() is where the data actually gets sent out.
+      while (1)
+      {
+     
+    
+        
+        if (Serial.available()) break;
+
+        myGPS.checkUblox(); //See if new data is available. Process bytes as they come in.
+
+        //Close socket if we don't have new data for 10s
+        //RTK2Go will ban your IP address if you abuse it. See http://www.rtk2go.com/how-to-get-your-ip-banned/
+        //So let's not leave the socket open/hanging without data
+        if (millis() - lastSentRTCM_ms > maxTimeBeforeHangup_ms)
+        {
+          Serial.println("RTCM timeout. Disconnecting...");
+          client.stop();
+          //direct.stop(); ///TCP connection direct
+          return;
+        }
+
+   
+
+        delay(10);
+
+        //Report some statistics every 250
+        if (millis() - lastReport_ms > 250)
+        {
+          lastReport_ms += 250;
+          Serial.printf("Total sent: %d\n", serverBytesSent);
+          digitalWrite(BUILTIN_LED, false);
+        }
+      }
+    }
+
+    delay(10);
+  }
+
+  Serial.println("User pressed a key");
+  Serial.println("Disconnecting...");
+  //client.stop();
+ 
+ // directPort.stop();
+
+
+  delay(10);
+  while (Serial.available()) Serial.read(); //Flush any endlines or carriage returns
+}
+
+
+
+
+void setup()
+{
+    Serial.begin(115200);
+    Serial.println("");
+    
+    Wire.begin();
+
+    pinMode(BUILTIN_LED,OUTPUT);
+
+    //myGPS.enableDebugging(); // Uncomment this line to enable debug messages
+
+    if (myGPS.begin() == false) //Connect to the u-blox module using Wire port
+    {
+      Serial.println(F("u-blox GPS not detected at default I2C address. Please check wiring. Freezing."));
+      while (1)
+      ;
+    }
+
+    Serial.print("Connecting to local WiFi" + String(ssid) );
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {  delay(500); Serial.print(".");  }
+    Serial.println("[WIFI] connected with Ip: " + WiFi.localIP().toString() );
+    
+      
+    tcpServer.onClient( &setupNewClient, &tcpServer );
+    tcpServer.begin();
+
+     myGPS.setI2COutput(COM_TYPE_UBX | COM_TYPE_NMEA | COM_TYPE_RTCM3); //UBX+RTCM3 is not a valid option so we enable all three.
+
+  myGPS.setNavigationFrequency(1); //Set output in Hz. RTCM rarely benefits from >1Hz.
+
+  //Disable all NMEA sentences
+  bool response = true;
+  response &= myGPS.disableNMEAMessage(UBX_NMEA_GGA, COM_PORT_I2C);
+  response &= myGPS.disableNMEAMessage(UBX_NMEA_GSA, COM_PORT_I2C);
+  response &= myGPS.disableNMEAMessage(UBX_NMEA_GSV, COM_PORT_I2C);
+  response &= myGPS.disableNMEAMessage(UBX_NMEA_RMC, COM_PORT_I2C);
+  response &= myGPS.disableNMEAMessage(UBX_NMEA_GST, COM_PORT_I2C);
+  response &= myGPS.disableNMEAMessage(UBX_NMEA_GLL, COM_PORT_I2C);
+  response &= myGPS.disableNMEAMessage(UBX_NMEA_VTG, COM_PORT_I2C);
+
+  if (response == false)
+  {
+    Serial.println(F("Failed to disable NMEA. Freezing..."));
+    while (1);
+  }
+  else
+    Serial.println(F("NMEA disabled"));
+
+  //Enable necessary RTCM sentences
+  response &= myGPS.enableRTCMmessage(UBX_RTCM_1005, COM_PORT_I2C, 1); //Enable message 1005 to output through UART2, message every second
+  response &= myGPS.enableRTCMmessage(UBX_RTCM_1074, COM_PORT_I2C, 1);
+  response &= myGPS.enableRTCMmessage(UBX_RTCM_1084, COM_PORT_I2C, 1);
+  response &= myGPS.enableRTCMmessage(UBX_RTCM_1094, COM_PORT_I2C, 1);
+  response &= myGPS.enableRTCMmessage(UBX_RTCM_1124, COM_PORT_I2C, 1);
+  response &= myGPS.enableRTCMmessage(UBX_RTCM_1230, COM_PORT_I2C, 10); //Enable message every 10 seconds
+
+  if (response == false)
+  {
+    Serial.println(F("Failed to enable RTCM. Freezing..."));
+    while (1);
+  }
+  else
+    Serial.println(F("RTCM sentences enabled"));
+
+  //-1280208.308,-4716803.847,4086665.811 is SparkFun HQ so...
+  //Units are cm with a high precision extension so -1234.5678 should be called: (-123456, -78)
+  //For more infomation see Example12_setStaticPosition
+  //Note: If you leave these coordinates in place and setup your antenna *not* at SparkFun, your receiver
+  //will be very confused and fail to generate correction data because, well, you aren't at SparkFun...
+  //See this tutorial on getting PPP coordinates: https://learn.sparkfun.com/tutorials/how-to-build-a-diy-gnss-reference-station/all
+  response &= myGPS.setStaticPosition(347806165, 23, 61588601, 51, 529303506, 16); //With high precision 0.1mm parts
+  if (response == false)
+  {
+    Serial.println(F("Failed to enter static position. Freezing..."));
+    while (1);
+  }
+  else
+    Serial.println(F("Static position set"));
+
+  //You could instead do a survey-in but it takes much longer to start generating RTCM data. See Example4_BaseWithLCD
+  //myGPS.enableSurveyMode(60, 5.000); //Enable Survey in, 60 seconds, 5.0m
+
+  if (myGPS.saveConfiguration() == false) //Save the current settings to flash and BBR
+    Serial.println(F("Module failed to save."));
+
+  Serial.println(F("Module configuration complete"));
+}
+
+void loop()
+{
+    
+    
+    if( millis() - lastTick > 2000 ) // every 2 sec , (output to Serial + sending to all clients)
+    {
+        Serial.println("[MAIN] loop still going , connected clients: " + String( clients.size() ) );
+        lastTick = millis();
+
+        sendStringToAllClients("hi clients, this is server.");
+    }
+}
