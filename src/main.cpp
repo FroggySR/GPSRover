@@ -13,7 +13,7 @@ WiFiClient client; //Declare a client object to connect to the server
 void setup()
 {
     Serial.begin(115200);
-    Serial1.begin(115200);
+    Serial1.begin(115200, SERIAL_8N1, 16, 17);
 
     Serial.println();
 
@@ -36,16 +36,25 @@ void setup()
 void loop()
 {
 
-if(Serial.available())
+
+while(Serial.available())
 {
-Serial1.print(Serial.readString());
+Serial1.print((char)Serial.read());
+
+}
+Serial1.flush();
+
+
+
+while(Serial1.available())
+{
+Serial.print((char)Serial1.read());
+
 }
 
-if(Serial1.available())
-{
-Serial.print(Serial1.readString());
-}
-
+//Serial.println(millis());
+//Serial1.println(millis());
+//delay(1000);
 /*
 
     Serial.println("Try to access the server");
