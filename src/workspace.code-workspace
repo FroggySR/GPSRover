@@ -1,12 +1,33 @@
 {
 	"folders": [
 		{
-			"path": "..\\.git"
+			"path": "..\\..\\Projects\\GPS_Base"
+		},
+		{
+			"name": "Async_server",
+			"path": "..\\..\\Projects\\Async_server"
+		},
+		{
+			"name": "TCP Server test",
+			"path": "..\\..\\Projects\\TCP Server test"
+		},
+		{
+			"name": "Projects",
+			"path": "..\\..\\Projects"
 		},
 		{
 			"name": "GPSRover",
 			"path": ".."
+		},
+		{
+			"name": "GPSBase",
+			"path": "..\\..\\GPSBase"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"files.associations": {
+			"queue": "cpp",
+			"random": "cpp"
+		}
+	}
 }
