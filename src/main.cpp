@@ -2,8 +2,8 @@
 
 #include <WiFi.h>
 
-//const char *ssid = "UniFi";
-const char *ssid = "SRiPhone";
+const char *ssid = "UniFi";
+//const char *ssid = "SRiPhone";
 const char *password = "Logitech";
 
 //const IPAddress serverIP(192,168,0,200); //Address to visit
@@ -11,6 +11,8 @@ const IPAddress serverIP(85, 191, 171, 18); //Address to visit External IP
 uint16_t serverPort = 200;                  //Server port number
 
 WiFiClient client; //Declare a client object to connect to the server
+
+String readString;
 
 void setup()
 {
@@ -76,18 +78,31 @@ Serial.print((char)Serial1.read());
         //client.print("X");                    //Send data to the server
         while (client.connected() || client.available()) //If it is connected or has received unread data
         {
+
+
+
+        // Earlierer program  
             while (client.available()) //If there is data to read
             {
+                
                 if (client.peek() == 0xD3)
                 {
-                    delay(900);
+                    delay(500);
                     while (client.available()) //If there is data to read
                     {
-
+                        
                         char line = client.read();
                         //Serial.print("Read data:");
-                        Serial1.print(line);
+                        readString += line;
+                        
+                          if (readString.length()<1023)
+                          {
+                            Serial1.print(readString);
+                            readString = "";
+                          }
                     }
+                        Serial1.print(readString);
+                        readString = "";
                 }
                 else
                 {
@@ -99,7 +114,9 @@ Serial.print((char)Serial1.read());
                     }
                 }
                 //client.write(line.c_str()); //Send the received data back
+                
             }
+            
             delay(5);
         }
         Serial.println("Close the current connection");
