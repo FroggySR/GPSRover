@@ -100,10 +100,9 @@ Serial.print((char)Serial1.read());
                     sendBuffer[0] = 0xd3;
                     sendBuffer[1] = 0x00;
                     indexSend = 1;
-                
                 }
 
-                lengthRctm = (int)sendBuffer[2] + 5; // Get lenght of RCTM message
+                lengthRctm = (int)sendBuffer[2] + 6; // Get lenght of RCTM message
 
                 if (indexSend > 1023 || indexSend < 0) // Overflow send buffer
                 {
@@ -120,7 +119,6 @@ Serial.print((char)Serial1.read());
 
                     Serial1.write(sendBuffer, lengthRctm);
                     Serial.write(sendBuffer, lengthRctm); //DEBUG
-                   
 
                     /*
     for (int i = 0; i <= lengthRctm; i++)
