@@ -6,9 +6,9 @@ const char *ssid = "UniFi";
 //const char *ssid = "SRiPhone";
 const char *password = "Logitech";
 
-const IPAddress serverIP(192, 168, 0, 200); //Address to visit
-//const IPAddress serverIP(85, 191, 171, 18); //Address to visit External IP
-uint16_t serverPort = 200; //Server port number
+//const IPAddress serverIP(192, 168, 0, 200); //Address to visit
+const IPAddress serverIP(85, 191, 171, 18); //Address to visit External IP
+uint16_t serverPort = 200;                  //Server port number
 
 WiFiClient client; //Declare a client object to connect to the server
 
@@ -100,6 +100,7 @@ Serial.print((char)Serial1.read());
                     sendBuffer[0] = 0xd3;
                     sendBuffer[1] = 0x00;
                     indexSend = 1;
+                
                 }
 
                 lengthRctm = (int)sendBuffer[2] + 5; // Get lenght of RCTM message
@@ -112,13 +113,15 @@ Serial.print((char)Serial1.read());
 
                 if (indexSend == lengthRctm && indexSend > 10 && lengthRctm > 10)
                 {
-                    Serial.print("lengthRctm: ");
-                    Serial.println(lengthRctm);
+                    // Serial.print("lengthRctm: ");
+                    //Serial.println(lengthRctm);
 
-                    if (client.connected() == true)
-                    {
-                        Serial1.write(sendBuffer, lengthRctm);
-                    }
+                    // if (client.connected() == true)
+
+                    Serial1.write(sendBuffer, lengthRctm);
+                    Serial.write(sendBuffer, lengthRctm); //DEBUG
+                   
+
                     /*
     for (int i = 0; i <= lengthRctm; i++)
     {
@@ -129,9 +132,9 @@ Serial.print((char)Serial1.read());
       //Serial.print(sendBuffer[i]);
     }
     */
-
+                    delay(100);
                     Serial1.flush();
-                    delay(10);
+                    Serial.flush();
                 }
                 // serverBytesSent++;
                 //lastSentRTCM_ms = millis();
